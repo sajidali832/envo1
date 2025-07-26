@@ -4,12 +4,12 @@ import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
-    projectId: "envoearn",
-    appId: "1:638839749104:web:23fe78043161e2d7794535",
-    storageBucket: "envoearn.firebasestorage.app",
-    apiKey: "AIzaSyCNoYrIjkWZtpy0p7r1duNpBUGeJ1CMjfw",
-    authDomain: "envoearn.firebaseapp.com",
-    messagingSenderId: "638839749104",
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
 // Initialize Firebase
