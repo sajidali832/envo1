@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -24,23 +25,21 @@ export default function InvestForm() {
   const easypaisaNumber = "03130306344";
   const [user, authLoading] = useAuthState(auth);
   
-  // No need for isClient state, as this component is client-only by default now.
+  useEffect(() => {
+    // This effect runs only on the client.
+    // If auth is not loading and there's no user, redirect.
+    if (!authLoading && !user) {
+      router.push('/signin');
+    }
+  }, [user, authLoading, router]);
 
-  if (authLoading) {
+  if (authLoading || !user) {
+    // Show a loader or placeholder while checking auth state.
+    // This prevents rendering the form before we know if a user is logged in.
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
-    );
-  }
-
-  if (!user) {
-    // Redirect to signin if they get here somehow without being logged in
-    router.push('/signin');
-    return (
-       <div className="flex items-center justify-center min-h-screen">
-          <p>Redirecting to sign in...</p>
-       </div>
     );
   }
 

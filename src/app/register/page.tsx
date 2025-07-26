@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Suspense } from 'react';
@@ -26,6 +27,8 @@ function RegisterForm() {
   const { toast } = useToast();
 
   useEffect(() => {
+    // This entire effect runs only on the client, after the component has mounted.
+    // It will not run during the Vercel build.
     const paymentId = sessionStorage.getItem("currentPaymentId");
     if (!paymentId) {
       toast({ variant: "destructive", title: "Access Denied", description: "Please submit a payment first." });
@@ -227,6 +230,7 @@ function RegisterPageSkeleton() {
     )
 }
 
+// Dynamically import the RegisterForm ONLY on the client side.
 const DynamicRegisterForm = dynamic(() => Promise.resolve(RegisterForm), {
     ssr: false,
     loading: () => <RegisterPageSkeleton />
@@ -235,6 +239,7 @@ const DynamicRegisterForm = dynamic(() => Promise.resolve(RegisterForm), {
 export default function RegisterPage() {
     return (
         <div className="flex items-center justify-center min-h-screen bg-secondary">
+           {/* Suspense is required by Next.js when using useSearchParams */}
            <Suspense fallback={<RegisterPageSkeleton />}>
                 <DynamicRegisterForm />
            </Suspense>
