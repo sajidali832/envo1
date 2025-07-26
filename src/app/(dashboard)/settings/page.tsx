@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -7,11 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { User, Mail, LogOut as LogOutIcon } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth, db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
-import { signOut } from "firebase/auth";
-
+import { createClient } from "@/lib/supabase/client";
 
 interface UserProfile {
   username: string;
@@ -19,28 +16,38 @@ interface UserProfile {
 }
 
 export default function SettingsPage() {
-  const [currentUser, loading] = useAuthState(auth);
+  const supabase = createClient();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
   const { toast } = useToast();
 
   useEffect(() => {
     const fetchUserProfile = async () => {
-      if (currentUser) {
-        const userDocRef = doc(db, "users", currentUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        if (userDocSnap.exists()) {
-          setUserProfile(userDocSnap.data() as UserProfile);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('username, email')
+          .eq('id', user.id)
+          .single();
+        
+        if (error) {
+            console.error("Error fetching profile", error);
+        } else {
+            setUserProfile(profile);
         }
       }
+      setLoading(false);
     };
     fetchUserProfile();
-  }, [currentUser]);
+  }, [supabase]);
 
   const handleLogout = async () => {
-    await signOut(auth);
+    await supabase.auth.signOut();
     toast({ title: "Logged Out", description: "You have been successfully logged out." });
     router.push("/signin");
+    router.refresh();
   };
 
   if (loading) {

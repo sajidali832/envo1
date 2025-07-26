@@ -1,12 +1,11 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { IndianRupee, Landmark } from "lucide-react";
-import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth, db } from "@/lib/firebase";
-import { doc, getDoc, updateDoc, arrayUnion, runTransaction } from "firebase/firestore";
+import { createClient } from "@/lib/supabase/client";
 
 interface Earning {
   amount: number;
@@ -19,77 +18,85 @@ interface User {
   username: string;
   investment: number;
   earnings: Earning[];
-  totalEarnings: number;
-  registrationDate: string;
-  lastEarningDate: string;
+  total_earnings: number;
+  registration_date: string;
+  last_earning_date: string;
 }
 
 export default function DashboardPage() {
-  const [user, loading] = useAuthState(auth);
+  const supabase = createClient();
   const [userData, setUserData] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchUserData = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+
       if (user) {
-        const userDocRef = doc(db, "users", user.uid);
-        const userDocSnap = await getDoc(userDocRef);
+        const { data: profileData, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
 
-        if (userDocSnap.exists()) {
-          let fetchedUserData = userDocSnap.data() as User;
+        if (error) {
+          console.error("Error fetching user profile:", error);
+          setIsLoading(false);
+          return;
+        }
 
-          // Daily earning logic
-          const lastEarningDate = new Date(fetchedUserData.lastEarningDate || fetchedUserData.registrationDate);
-          const today = new Date();
+        let fetchedUserData = profileData as User;
+
+        // Daily earning logic
+        const lastEarningDate = new Date(fetchedUserData.last_earning_date || fetchedUserData.registration_date);
+        const today = new Date();
+        
+        const isDifferentDay = today.setHours(0,0,0,0) > lastEarningDate.setHours(0,0,0,0);
+
+        if (isDifferentDay) {
+          const timeDiff = today.getTime() - lastEarningDate.getTime();
+          const daysPassed = Math.floor(timeDiff / (1000 * 3600 * 24));
           
-          const isDifferentDay = today.getFullYear() !== lastEarningDate.getFullYear() ||
-                                 today.getMonth() !== lastEarningDate.getMonth() ||
-                                 today.getDate() !== lastEarningDate.getDate();
+          if (daysPassed > 0) {
+            const earningsToAdd = daysPassed * 200;
+            const newEarningsHistory: Earning[] = [];
 
-          if (isDifferentDay) {
-            const timeDiff = today.getTime() - lastEarningDate.getTime();
-            const daysPassed = Math.floor(timeDiff / (1000 * 3600 * 24));
+            for (let i = 1; i <= daysPassed; i++) {
+              const earningDate = new Date(lastEarningDate);
+              earningDate.setDate(lastEarningDate.getDate() + i);
+              newEarningsHistory.push({ amount: 200, date: earningDate.toISOString(), type: 'Daily Return' });
+            }
+
+            const currentTotalEarnings = fetchedUserData.total_earnings || 0;
+            const currentEarnings = fetchedUserData.earnings || [];
             
-            if (daysPassed > 0) {
-              const earningsToAdd = daysPassed * 200;
-              const newEarningsHistory: Earning[] = [];
+            const { data: updatedProfile, error: updateError } = await supabase
+              .from('profiles')
+              .update({
+                total_earnings: currentTotalEarnings + earningsToAdd,
+                earnings: [...newEarningsHistory, ...currentEarnings],
+                last_earning_date: today.toISOString()
+              })
+              .eq('id', user.id)
+              .select()
+              .single();
 
-              for (let i = 1; i <= daysPassed; i++) {
-                const earningDate = new Date(lastEarningDate);
-                earningDate.setDate(lastEarningDate.getDate() + i);
-                newEarningsHistory.push({ amount: 200, date: earningDate.toISOString(), type: 'Daily Return' });
-              }
-
-              await runTransaction(db, async (transaction) => {
-                const freshUserDoc = await transaction.get(userDocRef);
-                if (!freshUserDoc.exists()) {
-                  throw "Document does not exist!";
-                }
-                const currentTotalEarnings = freshUserDoc.data().totalEarnings || 0;
-                const currentEarnings = freshUserDoc.data().earnings || [];
-
-                transaction.update(userDocRef, {
-                  totalEarnings: currentTotalEarnings + earningsToAdd,
-                  earnings: [...newEarningsHistory, ...currentEarnings],
-                  lastEarningDate: today.toISOString()
-                });
-              });
-              
-              // Refetch data to show the latest updates
-              const updatedUserDocSnap = await getDoc(userDocRef);
-              fetchedUserData = updatedUserDocSnap.data() as User;
+            if (updateError) {
+                console.error("Error updating earnings:", updateError);
+            } else {
+                fetchedUserData = updatedProfile as User;
             }
           }
-          setUserData(fetchedUserData);
         }
+        setUserData(fetchedUserData);
       }
       setIsLoading(false);
     };
 
     fetchUserData();
-  }, [user]);
+  }, [supabase]);
 
-  if (isLoading || loading) {
+  if (isLoading) {
     return <div>Loading user data...</div>;
   }
   
@@ -124,7 +131,7 @@ export default function DashboardPage() {
             <IndianRupee className="h-4 w-4 text-primary-foreground/70" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold font-headline">{formatCurrency(userData.totalEarnings)}</div>
+            <div className="text-2xl font-bold font-headline">{formatCurrency(userData.total_earnings)}</div>
             <p className="text-xs text-primary-foreground/70">All earnings including bonuses</p>
           </CardContent>
         </Card>
@@ -145,7 +152,7 @@ export default function DashboardPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {userData.earnings.length > 0 ? (
+              {userData.earnings && userData.earnings.length > 0 ? (
                 userData.earnings.slice().sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((earning, index) => (
                   <TableRow key={index}>
                     <TableCell>{formatDate(earning.date)}</TableCell>

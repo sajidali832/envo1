@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -7,9 +8,8 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Copy, Check, Gift } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth, db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { createClient } from "@/lib/supabase/client";
+
 
 interface Referral {
     username: string;
@@ -22,29 +22,38 @@ interface User {
 }
 
 export default function ReferralsPage() {
-  const [currentUser, loading] = useAuthState(auth);
+  const supabase = createClient();
   const [userData, setUserData] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const [referralLink, setReferralLink] = useState("");
   const [isCopied, setIsCopied] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     const fetchUserData = async () => {
-        if (currentUser) {
-            const userDocRef = doc(db, "users", currentUser.uid);
-            const userDocSnap = await getDoc(userDocRef);
-            if (userDocSnap.exists()) {
-                const user = userDocSnap.data() as User;
-                setUserData(user);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('id, username, referrals')
+                .eq('id', user.id)
+                .single();
+
+            if (error) {
+                console.error("Error fetching referrals", error);
+            } else {
+                const fetchedUser = data as User;
+                setUserData(fetchedUser);
                 if (typeof window !== "undefined") {
-                    const link = `${window.location.origin}/register?ref=${user.username}`;
+                    const link = `${window.location.origin}/register?ref=${fetchedUser.username}`;
                     setReferralLink(link);
                 }
             }
         }
+        setLoading(false);
     };
     fetchUserData();
-  }, [currentUser]);
+  }, [supabase]);
   
   const handleCopy = () => {
     navigator.clipboard.writeText(referralLink);

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -11,11 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Pencil, CheckCircle } from "lucide-react";
-import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth, db } from "@/lib/firebase";
-import { doc, getDoc, updateDoc, arrayUnion, runTransaction, collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { onSnapshot } from "firebase/firestore";
-
+import { createClient } from "@/lib/supabase/client";
 
 interface WithdrawalInfo {
   platform: string;
@@ -33,16 +30,18 @@ interface WithdrawalHistory {
 interface User {
   id: string;
   username: string;
-  totalEarnings: number;
-  withdrawalInfo: WithdrawalInfo | null;
-  withdrawalHistory: WithdrawalHistory[];
+  total_earnings: number;
+  withdrawal_info: WithdrawalInfo | null;
+  withdrawal_history: WithdrawalHistory[];
   referrals: any[];
-  canWithdrawOverride?: boolean;
+  can_withdraw_override?: boolean;
 }
 
 export default function WithdrawalPage() {
-  const [currentUser, loading] = useAuthState(auth);
+  const supabase = createClient();
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [userData, setUserData] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const [info, setInfo] = useState<WithdrawalInfo>({
     platform: "",
     accountHolderName: "",
@@ -54,30 +53,56 @@ export default function WithdrawalPage() {
   const [isEditingInfo, setIsEditingInfo] = useState(false);
 
   useEffect(() => {
-    if (!currentUser) return;
-
-    const userDocRef = doc(db, "users", currentUser.uid);
-    const unsubscribe = onSnapshot(userDocRef, (doc) => {
-      if (doc.exists()) {
-        const user = doc.data() as User;
-        setUserData(user);
-        if (user.withdrawalInfo) {
-          setInfo(user.withdrawalInfo);
-          setIsEditingInfo(false);
-        } else {
-          setIsEditingInfo(true);
-        }
-
-        const hasSeenPopup = localStorage.getItem('hasSeenWithdrawalPopup');
-        if (user.referrals.length < 2 && !hasSeenPopup) {
-            setShowReferralPopup(true);
-            localStorage.setItem('hasSeenWithdrawalPopup', 'true');
-        }
-      }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setCurrentUser(session?.user ?? null);
     });
 
-    return () => unsubscribe();
-  }, [currentUser]);
+    return () => subscription.unsubscribe();
+  }, [supabase.auth]);
+
+  useEffect(() => {
+    if (!currentUser) {
+        setLoading(false);
+        return;
+    };
+
+    const userChannel = supabase
+      .channel(`public:profiles:id=eq.${currentUser.id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (payload) => {
+        setUserData(payload.new as User);
+      })
+      .subscribe();
+
+      const fetchInitialData = async () => {
+        const { data, error } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single();
+        if (error) {
+            console.error("Error fetching user data", error);
+            setLoading(false);
+        } else {
+            const user = data as User;
+            setUserData(user);
+            if (user.withdrawal_info) {
+              setInfo(user.withdrawal_info);
+              setIsEditingInfo(false);
+            } else {
+              setIsEditingInfo(true);
+            }
+
+            const hasSeenPopup = localStorage.getItem('hasSeenWithdrawalPopup');
+            if (user.referrals.length < 2 && !hasSeenPopup) {
+                setShowReferralPopup(true);
+                localStorage.setItem('hasSeenWithdrawalPopup', 'true');
+            }
+            setLoading(false);
+        }
+      }
+      fetchInitialData();
+
+
+    return () => {
+        supabase.removeChannel(userChannel);
+    }
+  }, [currentUser, supabase]);
   
   const handleSaveInfo = async () => {
     if (!currentUser) return;
@@ -85,15 +110,23 @@ export default function WithdrawalPage() {
       toast({ variant: "destructive", title: "Error", description: "Please fill all fields." });
       return;
     }
-    const userDocRef = doc(db, "users", currentUser.uid);
-    await updateDoc(userDocRef, { withdrawalInfo: info });
-    setIsEditingInfo(false);
-    toast({ title: "Success", description: "Withdrawal information saved.", className: "bg-green-500 text-white" });
+    
+    const { error } = await supabase
+        .from('profiles')
+        .update({ withdrawal_info: info })
+        .eq('id', currentUser.id);
+
+    if (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not save information.'});
+    } else {
+        setIsEditingInfo(false);
+        toast({ title: "Success", description: "Withdrawal information saved.", className: "bg-green-500 text-white" });
+    }
   };
 
   const handleWithdraw = async () => {
     if (!currentUser || !userData) return;
-    if (userData.referrals.length < 2 && !userData.canWithdrawOverride) {
+    if (userData.referrals.length < 2 && !userData.can_withdraw_override) {
         toast({ variant: "destructive", title: "Withdrawal Locked", description: "You need 2 successful referrals to withdraw." });
         return;
     }
@@ -102,47 +135,32 @@ export default function WithdrawalPage() {
       toast({ variant: "destructive", title: "Invalid Amount", description: "Withdrawal must be between 600 and 1600 PKR." });
       return;
     }
-    if (numAmount > userData.totalEarnings) {
+    if (numAmount > userData.total_earnings) {
       toast({ variant: "destructive", title: "Insufficient Balance", description: "You cannot withdraw more than you have earned." });
       return;
     }
 
     const newWithdrawalRequest = {
-      userId: currentUser.uid,
+      user_id: currentUser.id,
       username: userData.username,
       amount: numAmount,
-      date: new Date().toISOString(),
+      submitted_at: new Date().toISOString(),
       status: 'processing' as const,
-      accountInfo: userData.withdrawalInfo
+      account_info: userData.withdrawal_info
     };
     
-    // Add to a new top-level 'withdrawals' collection
-    const withdrawalRef = await addDoc(collection(db, "withdrawals"), newWithdrawalRequest);
-
-    const userDocRef = doc(db, "users", currentUser.uid);
-    await runTransaction(db, async (transaction) => {
-        const userDoc = await transaction.get(userDocRef);
-        if (!userDoc.exists()) {
-            throw "User document does not exist!";
-        }
-        const currentTotalEarnings = userDoc.data().totalEarnings;
-        const newTotalEarnings = currentTotalEarnings - numAmount;
-
-        const newHistoryItem = {
-            id: withdrawalRef.id,
-            amount: numAmount,
-            date: new Date().toISOString(),
-            status: 'processing' as const
-        };
-
-        transaction.update(userDocRef, {
-            totalEarnings: newTotalEarnings,
-            withdrawalHistory: arrayUnion(newHistoryItem)
-        });
+    const { error } = await supabase.rpc('request_withdrawal', {
+        request_data: newWithdrawalRequest,
+        amount_to_deduct: numAmount
     });
 
-    setAmount("");
-    toast({ title: "Request Submitted", description: "Your withdrawal request is being processed." });
+    if (error) {
+        console.error("Error requesting withdrawal:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not submit withdrawal request." });
+    } else {
+        setAmount("");
+        toast({ title: "Request Submitted", description: "Your withdrawal request is being processed." });
+    }
   };
 
   const getStatusBadge = (status: 'processing' | 'approved' | 'rejected') => {
@@ -225,9 +243,9 @@ export default function WithdrawalPage() {
                    </div>
                  </div>
                  <div className="p-4 rounded-lg bg-secondary space-y-2 text-sm">
-                    <p><strong>Platform:</strong> {userData?.withdrawalInfo?.platform}</p>
-                    <p><strong>Name:</strong> {userData?.withdrawalInfo?.accountHolderName}</p>
-                    <p><strong>Number:</strong> {userData?.withdrawalInfo?.accountNumber}</p>
+                    <p><strong>Platform:</strong> {userData?.withdrawal_info?.platform}</p>
+                    <p><strong>Name:</strong> {userData?.withdrawal_info?.accountHolderName}</p>
+                    <p><strong>Number:</strong> {userData?.withdrawal_info?.accountNumber}</p>
                  </div>
                  <Button onClick={() => setIsEditingInfo(true)} className="w-full font-bold" variant="outline">
                     <Pencil className="mr-2 h-4 w-4"/>
@@ -247,9 +265,9 @@ export default function WithdrawalPage() {
             <div className="space-y-2">
               <Label>Amount (PKR)</Label>
               <Input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="e.g. 1000"/>
-              <p className="text-sm text-muted-foreground">Available to withdraw: {userData?.totalEarnings.toLocaleString()} PKR</p>
+              <p className="text-sm text-muted-foreground">Available to withdraw: {userData?.total_earnings.toLocaleString()} PKR</p>
             </div>
-            <Button onClick={handleWithdraw} className="w-full font-bold" disabled={!userData?.withdrawalInfo || isEditingInfo || (userData && userData.referrals.length < 2 && !userData.canWithdrawOverride)}>Request Withdrawal</Button>
+            <Button onClick={handleWithdraw} className="w-full font-bold" disabled={!userData?.withdrawal_info || isEditingInfo || (userData && userData.referrals.length < 2 && !userData.can_withdraw_override)}>Request Withdrawal</Button>
           </CardContent>
         </Card>
       </div>
@@ -268,8 +286,8 @@ export default function WithdrawalPage() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {userData?.withdrawalHistory && userData.withdrawalHistory.length > 0 ? (
-                        userData.withdrawalHistory.slice().sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(w => (
+                    {userData?.withdrawal_history && userData.withdrawal_history.length > 0 ? (
+                        userData.withdrawal_history.slice().sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(w => (
                             <TableRow key={w.id}>
                                 <TableCell>{new Date(w.date).toLocaleDateString()}</TableCell>
                                 <TableCell>PKR {w.amount.toLocaleString()}</TableCell>
