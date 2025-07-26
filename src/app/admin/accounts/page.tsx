@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -5,29 +6,41 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, Check } from "lucide-react";
-import { db } from "@/lib/firebase";
-import { collection, onSnapshot } from "firebase/firestore";
+import { Copy } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 interface UserCredentials {
   id: string;
   username: string;
   email: string;
-  // Passwords are not stored in Firestore for security reasons.
-  // This page is for reference only.
 }
 
 export default function AccountsPage() {
   const [users, setUsers] = useState<UserCredentials[]>([]);
   const { toast } = useToast();
+  const supabase = createClient();
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "users"), (snapshot) => {
-        const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserCredentials));
-        setUsers(usersData);
-    });
-    return () => unsubscribe();
-  }, []);
+    const fetchUsers = async () => {
+        const { data, error } = await supabase.from('profiles').select('id, username, email');
+        if (error) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch users.' });
+        } else {
+            setUsers(data as UserCredentials[]);
+        }
+    }
+    fetchUsers();
+
+    const channel = supabase.channel('realtime-profiles-accounts')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, (payload) => {
+            fetchUsers();
+        })
+        .subscribe();
+
+    return () => {
+        supabase.removeChannel(channel);
+    }
+  }, [supabase, toast]);
   
   const handleCopy = (text: string) => {
       navigator.clipboard.writeText(text);

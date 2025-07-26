@@ -1,17 +1,18 @@
+
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { db } from "@/lib/firebase";
-import { doc, onSnapshot } from "firebase/firestore";
+import { createClient } from "@/lib/supabase/client";
 
-export default function TimerPage() {
+function TimerComponent() {
   const [timeLeft, setTimeLeft] = useState(600); // 10 minutes in seconds
   const [status, setStatus] = useState<"pending" | "approved" | "rejected" | "timedout">("pending");
   const router = useRouter();
   const { toast } = useToast();
+  const supabase = createClient();
 
   useEffect(() => {
     const paymentId = sessionStorage.getItem("currentPaymentId");
@@ -21,10 +22,11 @@ export default function TimerPage() {
       return;
     }
 
-    const timer = setInterval(() => {
+    // Countdown timer logic
+    const countdownTimer = setInterval(() => {
       setTimeLeft((prevTime) => {
         if (prevTime <= 1) {
-          clearInterval(timer);
+          clearInterval(countdownTimer);
           if (status === 'pending') {
              setStatus("timedout");
           }
@@ -34,25 +36,33 @@ export default function TimerPage() {
       });
     }, 1000);
 
-    const paymentDocRef = doc(db, "payments", paymentId);
-    const unsubscribe = onSnapshot(paymentDocRef, (docSnap) => {
-        if (docSnap.exists()) {
-            const currentStatus = docSnap.data().status;
-            if (currentStatus === "approved") {
-                setStatus("approved");
-                clearInterval(timer);
-            } else if (currentStatus === "rejected") {
-                setStatus("rejected");
-                clearInterval(timer);
-            }
+    // Supabase real-time subscription
+    const channel = supabase
+      .channel(`payment-status-${paymentId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'payments',
+          filter: `id=eq.${paymentId}`,
+        },
+        (payload) => {
+          const newStatus = payload.new.status;
+          if (newStatus === "approved" || newStatus === "rejected") {
+            setStatus(newStatus);
+            channel.unsubscribe();
+            clearInterval(countdownTimer);
+          }
         }
-    });
+      )
+      .subscribe();
 
     return () => {
-      clearInterval(timer);
-      unsubscribe();
+      clearInterval(countdownTimer);
+      supabase.removeChannel(channel);
     };
-  }, [router, toast, status]);
+  }, [router, toast, status, supabase]);
   
   useEffect(() => {
     if (status === "approved") {
@@ -123,4 +133,13 @@ export default function TimerPage() {
       </Card>
     </div>
   );
+}
+
+
+export default function TimerPage() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <TimerComponent />
+        </Suspense>
+    )
 }
