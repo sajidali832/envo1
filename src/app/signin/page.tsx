@@ -11,6 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
+export const dynamic = 'force-dynamic';
+
 export default function SignInPage() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
