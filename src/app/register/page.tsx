@@ -12,6 +12,7 @@ import { doc, getDoc, setDoc, updateDoc, arrayUnion, runTransaction, collection,
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { db, auth } from "@/lib/firebase";
 import { Skeleton } from '@/components/ui/skeleton';
+import dynamic from 'next/dynamic';
 
 function RegisterForm() {
   const [username, setUsername] = useState("");
@@ -226,11 +227,16 @@ function RegisterPageSkeleton() {
     )
 }
 
+const DynamicRegisterForm = dynamic(() => Promise.resolve(RegisterForm), {
+    ssr: false,
+    loading: () => <RegisterPageSkeleton />
+});
+
 export default function RegisterPage() {
     return (
         <div className="flex items-center justify-center min-h-screen bg-secondary">
            <Suspense fallback={<RegisterPageSkeleton />}>
-                <RegisterForm />
+                <DynamicRegisterForm />
            </Suspense>
         </div>
     )
