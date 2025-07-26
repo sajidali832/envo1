@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -7,60 +8,80 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import Image from "next/image";
 import { useToast } from "@/hooks/use-toast";
-import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, updateDoc, writeBatch } from "firebase/firestore";
+import { createClient } from "@/lib/supabase/client";
 
 interface PaymentRequest {
   id: string;
-  userId: string;
-  accountHolderName: string;
-  accountNumber: string;
+  user_id: string;
+  account_holder_name: string;
+  account_number: string;
   screenshot: string;
   status: "pending" | "approved" | "rejected";
-  submittedAt: string;
+  submitted_at: string;
 }
 
 export default function ApprovalsPage() {
   const [payments, setPayments] = useState<PaymentRequest[]>([]);
   const { toast } = useToast();
+  const supabase = createClient();
 
   useEffect(() => {
-    const q = query(collection(db, "payments"), where("status", "==", "pending"));
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const pendingPayments: PaymentRequest[] = [];
-      querySnapshot.forEach((doc) => {
-        pendingPayments.push({ id: doc.id, ...doc.data() } as PaymentRequest);
-      });
-      setPayments(pendingPayments);
-    });
+    const fetchPayments = async () => {
+        const { data, error } = await supabase
+            .from('payments')
+            .select('*')
+            .eq('status', 'pending');
+        
+        if (error) {
+            toast({ variant: "destructive", title: "Error", description: "Could not fetch pending payments." });
+        } else {
+            setPayments(data as PaymentRequest[]);
+        }
+    }
 
-    return () => unsubscribe();
-  }, []);
+    fetchPayments();
+
+    const channel = supabase.channel('realtime-payments-pending')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments', filter: 'status=eq.pending' }, (payload) => {
+        fetchPayments();
+      })
+      .subscribe();
+
+    return () => {
+        supabase.removeChannel(channel);
+    }
+
+  }, [supabase, toast]);
 
   const handleAction = async (paymentId: string, userId: string, newStatus: "approved" | "rejected") => {
-    const paymentDocRef = doc(db, "payments", paymentId);
-    const userDocRef = doc(db, "users", userId);
     
     try {
-      const batch = writeBatch(db);
-      
       // Update payment status
-      batch.update(paymentDocRef, { status: newStatus });
+      const { error: paymentError } = await supabase
+        .from('payments')
+        .update({ status: newStatus })
+        .eq('id', paymentId);
       
+      if (paymentError) throw paymentError;
+
       // If approved, update user's investment status
       if (newStatus === "approved") {
-        batch.update(userDocRef, { investment: 6000 });
+        const { error: profileError } = await supabase
+            .from('profiles')
+            .update({ investment: 6000 })
+            .eq('id', userId);
+        
+        if (profileError) throw profileError;
       }
-
-      await batch.commit();
 
       toast({
         title: "Success",
         description: `Payment has been ${newStatus}.`,
       });
-    } catch (error) {
+      // The real-time subscription will update the UI
+    } catch (error: any) {
       console.error("Error updating status: ", error);
-      toast({ variant: "destructive", title: "Error", description: "Could not update the payment status." });
+      toast({ variant: "destructive", title: "Error", description: error.message || "Could not update the payment status." });
     }
   };
 
@@ -86,9 +107,9 @@ export default function ApprovalsPage() {
             {payments.length > 0 ? (
               payments.map((payment) => (
                 <TableRow key={payment.id}>
-                  <TableCell>{new Date(payment.submittedAt).toLocaleString()}</TableCell>
-                  <TableCell>{payment.accountHolderName}</TableCell>
-                  <TableCell>{payment.accountNumber}</TableCell>
+                  <TableCell>{new Date(payment.submitted_at).toLocaleString()}</TableCell>
+                  <TableCell>{payment.account_holder_name}</TableCell>
+                  <TableCell>{payment.account_number}</TableCell>
                   <TableCell>
                     <Dialog>
                       <DialogTrigger asChild>
@@ -105,8 +126,8 @@ export default function ApprovalsPage() {
                     </Dialog>
                   </TableCell>
                   <TableCell className="text-right space-x-2">
-                    <Button size="sm" onClick={() => handleAction(payment.id, payment.userId, 'approved')} className="bg-green-600 hover:bg-green-700">Approve</Button>
-                    <Button size="sm" variant="destructive" onClick={() => handleAction(payment.id, payment.userId, 'rejected')}>Reject</Button>
+                    <Button size="sm" onClick={() => handleAction(payment.id, payment.user_id, 'approved')} className="bg-green-600 hover:bg-green-700">Approve</Button>
+                    <Button size="sm" variant="destructive" onClick={() => handleAction(payment.id, payment.user_id, 'rejected')}>Reject</Button>
                   </TableCell>
                 </TableRow>
               ))

@@ -1,11 +1,11 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import BottomNav from "@/components/bottom-nav";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth } from "@/lib/firebase";
+import { createClient } from "@/lib/supabase/client";
 
 export default function DashboardLayout({
   children,
@@ -13,13 +13,38 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const [user, loading] = useAuthState(auth);
+  const supabase = createClient();
+  const [user, setUser] = useState<any | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.replace("/signin");
-    }
-  }, [user, loading, router]);
+    const checkUser = async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (error || !data.user) {
+        router.replace("/signin");
+      } else {
+        setUser(data.user);
+      }
+      setLoading(false);
+    };
+
+    checkUser();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === "SIGNED_OUT" || !session) {
+          router.replace("/signin");
+        } else if (event === "SIGNED_IN") {
+          setUser(session.user);
+        }
+      }
+    );
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+
+  }, [router, supabase]);
 
   if (loading || !user) {
     return (

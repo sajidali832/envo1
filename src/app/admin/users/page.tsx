@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -11,16 +12,15 @@ import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Download } from "lucide-react";
-import { db } from "@/lib/firebase";
-import { collection, onSnapshot, doc, getDoc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
+import { createClient } from "@/lib/supabase/client";
 
 interface User {
   id: string;
   username: string;
   email: string;
-  totalEarnings: number;
-  registrationDate: string;
-  canWithdrawOverride: boolean;
+  total_earnings: number;
+  registration_date: string;
+  can_withdraw_override: boolean;
   [key: string]: any;
 }
 
@@ -31,43 +31,73 @@ export default function UsersPage() {
   const [editBalance, setEditBalance] = useState("");
   const [canWithdraw, setCanWithdraw] = useState(false);
   const { toast } = useToast();
+  const supabase = createClient();
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "users"), (snapshot) => {
-      const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-      setUsers(usersData);
-    });
-    return () => unsubscribe();
-  }, []);
+    const fetchUsers = async () => {
+        const { data, error } = await supabase.from('profiles').select('*');
+        if (error) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch users.'});
+        } else {
+            setUsers(data as User[]);
+        }
+    }
+    fetchUsers();
+
+    const channel = supabase.channel('realtime-profiles')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, (payload) => {
+        fetchUsers(); // Refetch all users on any change
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, toast]);
   
   const handleViewUser = async (user: User) => {
-    const userDoc = await getDoc(doc(db, "users", user.id));
-    setFullSelectedUser({id: userDoc.id, ...userDoc.data()} as User);
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+    if(error) {
+        toast({variant: 'destructive', title: 'Error', description: 'Could not fetch user details.'})
+        return;
+    }
+    setFullSelectedUser(data as User);
   };
 
   const handleSelectUserForEdit = (user: User) => {
     setSelectedUser(user);
-    setEditBalance(user.totalEarnings.toString());
-    setCanWithdraw(user.canWithdrawOverride || false);
+    setEditBalance(user.total_earnings.toString());
+    setCanWithdraw(user.can_withdraw_override || false);
   };
   
   const handleSaveChanges = async () => {
     if (!selectedUser) return;
     
-    const userDocRef = doc(db, "users", selectedUser.id);
-    await updateDoc(userDocRef, {
-        totalEarnings: parseFloat(editBalance) || selectedUser.totalEarnings,
-        canWithdrawOverride: canWithdraw
-    });
-    
-    toast({ title: "Success", description: "User updated." });
+    const { error } = await supabase
+        .from('profiles')
+        .update({
+            total_earnings: parseFloat(editBalance) || selectedUser.total_earnings,
+            can_withdraw_override: canWithdraw
+        })
+        .eq('id', selectedUser.id)
+
+    if (error) {
+        toast({ variant: 'destructive', title: "Error", description: "Could not update user." });
+    } else {
+        toast({ title: "Success", description: "User updated." });
+    }
   };
 
   const handleDeleteUser = async (userId: string) => {
-    // This is a simplified delete. In a real app, you might want to handle this
-    // via a cloud function to clean up related data (auth user, etc.)
-    await deleteDoc(doc(db, "users", userId));
-    toast({ title: "User Deleted", description: "The user has been removed from Firestore." });
+    // This is a simplified delete. In a real app, you would want to handle this
+    // via a cloud function to clean up the auth user as well.
+    const { error } = await supabase.from('profiles').delete().eq('id', userId);
+    
+    if (error) {
+        toast({ variant: 'destructive', title: "Error", description: "Could not delete user." });
+    } else {
+        toast({ title: "User Deleted", description: "The user has been removed from the database." });
+    }
   }
 
   const handleExportData = () => {
@@ -114,8 +144,8 @@ export default function UsersPage() {
               <TableRow key={user.id}>
                 <TableCell>{user.username}</TableCell>
                 <TableCell>{user.email}</TableCell>
-                <TableCell>PKR {user.totalEarnings?.toLocaleString() || 0}</TableCell>
-                <TableCell>{new Date(user.registrationDate).toLocaleDateString()}</TableCell>
+                <TableCell>PKR {user.total_earnings?.toLocaleString() || 0}</TableCell>
+                <TableCell>{new Date(user.registration_date).toLocaleDateString()}</TableCell>
                 <TableCell className="text-right space-x-2">
                    <Dialog onOpenChange={(open) => !open && setFullSelectedUser(null)}>
                         <DialogTrigger asChild>
@@ -165,7 +195,7 @@ export default function UsersPage() {
                         <AlertDialogHeader>
                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                             <AlertDialogDescription>
-                                This action cannot be undone. This will permanently delete the user's document from Firestore.
+                                This action cannot be undone. This will permanently delete the user's document from the database.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>

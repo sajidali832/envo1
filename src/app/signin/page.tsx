@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from "react";
@@ -8,10 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
-import { collection, query, where, getDocs } from "firebase/firestore";
-
+import { createClient } from "@/lib/supabase/client";
 
 export default function SignInPage() {
   const [identifier, setIdentifier] = useState("");
@@ -19,6 +17,7 @@ export default function SignInPage() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+  const supabase = createClient();
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -28,29 +27,40 @@ export default function SignInPage() {
       let email = identifier;
       // If the identifier doesn't look like an email, assume it's a username
       if (!identifier.includes('@')) {
-        const usersRef = collection(db, "users");
-        const q = query(usersRef, where("username", "==", identifier));
-        const querySnapshot = await getDocs(q);
-        if (querySnapshot.empty) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('username', identifier)
+          .single();
+        
+        if (error || !data) {
           throw new Error("Invalid credentials");
         }
-        email = querySnapshot.docs[0].data().email;
+        email = data.email;
       }
 
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+          throw error;
+      }
       
       toast({
         title: "Sign In Successful",
         description: `Welcome back!`,
       });
+      router.refresh(); // This will re-run the layout logic and redirect to the dashboard
       router.push("/dashboard");
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error during sign in:", error);
       toast({
         variant: "destructive",
         title: "Sign In Failed",
-        description: "Invalid credentials. Please try again.",
+        description: error.message || "Invalid credentials. Please try again.",
       });
       setIsLoading(false);
     }

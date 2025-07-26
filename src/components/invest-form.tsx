@@ -10,9 +10,9 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Info, Copy, Check, Loader2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useAuthState } from "react-firebase-hooks/auth";
-import { auth, db } from "@/lib/firebase";
-import { collection, doc, setDoc } from "firebase/firestore";
+import { createClient } from "@/lib/supabase/client";
+import { v4 as uuidv4 } from 'uuid';
+
 
 export default function InvestForm() {
   const [accountHolderName, setAccountHolderName] = useState("");
@@ -23,19 +23,24 @@ export default function InvestForm() {
   const router = useRouter();
   const { toast } = useToast();
   const easypaisaNumber = "03130306344";
-  const [user, authLoading] = useAuthState(auth);
-  
+  const supabase = createClient();
+  const [user, setUser] = useState<any | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
   useEffect(() => {
-    // This effect runs only on the client.
-    // If auth is not loading and there's no user, redirect.
-    if (!authLoading && !user) {
-      router.push('/signin');
+    const getUser = async () => {
+        const { data } = await supabase.auth.getUser();
+        if (data.user) {
+            setUser(data.user);
+        } else {
+            router.push('/signin');
+        }
+        setAuthLoading(false);
     }
-  }, [user, authLoading, router]);
+    getUser();
+  }, [router, supabase.auth]);
 
   if (authLoading || !user) {
-    // Show a loader or placeholder while checking auth state.
-    // This prevents rendering the form before we know if a user is logged in.
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -68,7 +73,7 @@ export default function InvestForm() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!accountHolderName || !accountNumber || !paymentScreenshot || !user) {
       toast({
@@ -81,28 +86,43 @@ export default function InvestForm() {
 
     setIsLoading(true);
 
-    const reader = new FileReader();
-    reader.readAsDataURL(paymentScreenshot);
-    reader.onload = async () => {
-      const screenshotDataUrl = reader.result as string;
-      
-      const paymentId = doc(collection(db, "payments")).id;
+    try {
+        // 1. Upload screenshot to Supabase Storage
+        const fileExt = paymentScreenshot.name.split('.').pop();
+        const fileName = `${user.id}-${uuidv4()}.${fileExt}`;
+        const filePath = `payment-screenshots/${fileName}`;
 
-      const newPayment = {
-        id: paymentId,
-        userId: user.uid,
-        accountHolderName,
-        accountNumber,
-        paymentPlatform: "Easypaisa",
-        screenshot: screenshotDataUrl,
-        status: "pending" as const,
-        submittedAt: new Date().toISOString(),
-      };
+        const { error: uploadError } = await supabase.storage
+            .from('app-files') // Make sure you have a bucket named 'app-files'
+            .upload(filePath, paymentScreenshot);
 
-      try {
-        await setDoc(doc(db, "payments", paymentId), newPayment);
+        if (uploadError) throw uploadError;
+
+        // 2. Get the public URL of the uploaded file
+        const { data: urlData } = supabase.storage
+            .from('app-files')
+            .getPublicUrl(filePath);
         
-        sessionStorage.setItem("currentPaymentId", newPayment.id);
+        const screenshotPublicUrl = urlData.publicUrl;
+
+        // 3. Save payment details to 'payments' table in Supabase
+        const paymentId = uuidv4();
+        const { error: dbError } = await supabase
+            .from('payments')
+            .insert({
+                id: paymentId,
+                user_id: user.id,
+                account_holder_name: accountHolderName,
+                account_number: accountNumber,
+                payment_platform: "Easypaisa",
+                screenshot: screenshotPublicUrl,
+                status: "pending",
+                submitted_at: new Date().toISOString(),
+            });
+
+        if (dbError) throw dbError;
+
+        sessionStorage.setItem("currentPaymentId", paymentId);
         
         toast({
           title: "Payment Submitted",
@@ -110,25 +130,16 @@ export default function InvestForm() {
         });
         
         router.push("/timer");
-      } catch (error) {
-        console.error("Failed to save payment to Firestore", error);
+
+    } catch (error: any) {
+        console.error("Failed to submit payment", error);
         toast({
           variant: "destructive",
           title: "Submission Failed",
-          description: "Could not submit your payment. Please try again.",
+          description: error.message || "Could not submit your payment. Please try again.",
         });
         setIsLoading(false);
-      }
-    };
-    reader.onerror = (error) => {
-      console.error("Error reading file:", error);
-      toast({
-        variant: "destructive",
-        title: "File Read Error",
-        description: "Could not read the screenshot file. Please try again.",
-      });
-      setIsLoading(false);
-    };
+    }
   };
 
   return (
