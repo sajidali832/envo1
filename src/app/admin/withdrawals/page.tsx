@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -5,17 +6,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, updateDoc, runTransaction, arrayUnion } from "firebase/firestore";
+import { createClient } from "@/lib/supabase/client";
+import { runTransaction } from "firebase/firestore";
 
 interface WithdrawalRequest {
   id: string;
-  userId: string;
+  user_id: string;
   username: string;
   amount: number;
-  date: string;
+  submitted_at: string;
   status: 'processing' | 'approved' | 'rejected';
-  accountInfo: {
+  account_info: {
       platform: string;
       accountHolderName: string;
       accountNumber: string;
@@ -25,41 +26,49 @@ interface WithdrawalRequest {
 export default function WithdrawalsPage() {
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const { toast } = useToast();
+  const supabase = createClient();
 
   useEffect(() => {
-    const q = query(collection(db, "withdrawals"), where("status", "==", "processing"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-        const withdrawalData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WithdrawalRequest));
-        setWithdrawals(withdrawalData);
-    });
-    return () => unsubscribe();
-  }, []);
+    const fetchWithdrawals = async () => {
+        const { data, error } = await supabase
+            .from('withdrawals')
+            .select('*')
+            .eq('status', 'processing')
+            .order('submitted_at', { ascending: false });
+
+        if (error) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch withdrawals.' });
+        } else {
+            setWithdrawals(data as WithdrawalRequest[]);
+        }
+    };
+    
+    fetchWithdrawals();
+
+    const channel = supabase.channel('realtime-withdrawals-processing')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'withdrawals', filter: 'status=eq.processing' }, (payload) => {
+        fetchWithdrawals();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+
+  }, [supabase, toast]);
 
   const handleAction = async (withdrawal: WithdrawalRequest, newStatus: 'approved' | 'rejected') => {
-      const withdrawalDocRef = doc(db, "withdrawals", withdrawal.id);
-      const userDocRef = doc(db, "users", withdrawal.userId);
       
       try {
-          await runTransaction(db, async (transaction) => {
-              const userDoc = await transaction.get(userDocRef);
-              if (!userDoc.exists()) {
-                  throw new Error("User not found!");
-              }
-
-              const existingHistory = userDoc.data().withdrawalHistory || [];
-              const updatedHistory = existingHistory.map((h: any) => 
-                  h.id === withdrawal.id ? { ...h, status: newStatus } : h
-              );
-              
-              transaction.update(withdrawalDocRef, { status: newStatus });
-              transaction.update(userDocRef, { withdrawalHistory: updatedHistory });
-
-              if (newStatus === 'rejected') {
-                  const currentBalance = userDoc.data().totalEarnings || 0;
-                  transaction.update(userDocRef, { totalEarnings: currentBalance + withdrawal.amount });
-              }
+          const { error } = await supabase.rpc('handle_withdrawal', {
+              request_id: withdrawal.id,
+              new_status: newStatus
           });
+
+          if (error) throw error;
+          
           toast({ title: 'Success', description: `Withdrawal has been ${newStatus}.` });
+
       } catch (error: any) {
           console.error("Transaction failed: ", error);
           toast({variant: 'destructive', title: 'Error', description: error.message || 'Could not process withdrawal.'});
@@ -87,11 +96,11 @@ export default function WithdrawalsPage() {
             {withdrawals.length > 0 ? (
                 withdrawals.map(w => (
                     <TableRow key={w.id}>
-                        <TableCell>{new Date(w.date).toLocaleString()}</TableCell>
+                        <TableCell>{new Date(w.submitted_at).toLocaleString()}</TableCell>
                         <TableCell>{w.username}</TableCell>
                         <TableCell>PKR {w.amount.toLocaleString()}</TableCell>
                         <TableCell>
-                            {w.accountInfo.platform} - {w.accountInfo.accountHolderName} ({w.accountInfo.accountNumber})
+                            {w.account_info.platform} - {w.account_info.accountHolderName} ({w.account_info.accountNumber})
                         </TableCell>
                         <TableCell className="text-right space-x-2">
                            <Button size="sm" onClick={() => handleAction(w, 'approved')} className="bg-green-600 hover:bg-green-700">Approve</Button>
