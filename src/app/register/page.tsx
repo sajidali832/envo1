@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from 'react';
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -10,8 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 import { doc, getDoc, setDoc, updateDoc, arrayUnion, runTransaction, collection, where, query, getDocs } from "firebase/firestore";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { db, auth } from "@/lib/firebase";
+import { Skeleton } from '@/components/ui/skeleton';
 
-export default function RegisterPage() {
+function RegisterForm() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -91,7 +93,7 @@ export default function RegisterPage() {
         id: user.uid,
         username,
         email,
-        investment: 0, // Set to 0 initially, approval process will update it.
+        investment: 6000,
         earnings: [],
         totalEarnings: 0,
         withdrawalInfo: null,
@@ -149,53 +151,87 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-secondary">
-      <Card className="w-full max-w-sm shadow-xl">
-        <CardHeader className="text-center">
-          <CardTitle className="font-headline text-2xl">Create Your Account</CardTitle>
-          <CardDescription>Congratulations on your approval! Let's get you set up.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleRegister} className="space-y-3">
-            <div className="space-y-1">
-              <Label htmlFor="username">Username</Label>
-              <Input
-                id="username"
-                value={username}
-                onBlur={(e) => validateField("username", e.target.value)}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-              />
-              {usernameError && <p className="text-sm text-destructive">{usernameError}</p>}
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onBlur={(e) => validateField("email", e.target.value)}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-              {emailError && <p className="text-sm text-destructive">{emailError}</p>}
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            <Button type="submit" className="w-full font-bold" disabled={isLoading || !!usernameError || !!emailError}>
-              {isLoading ? "Creating Account..." : "Complete Registration"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+    <Card className="w-full max-w-sm shadow-xl">
+      <CardHeader className="text-center">
+        <CardTitle className="font-headline text-2xl">Create Your Account</CardTitle>
+        <CardDescription>Congratulations on your approval! Let's get you set up.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleRegister} className="space-y-3">
+          <div className="space-y-1">
+            <Label htmlFor="username">Username</Label>
+            <Input
+              id="username"
+              value={username}
+              onBlur={(e) => validateField("username", e.target.value)}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+            />
+            {usernameError && <p className="text-sm text-destructive">{usernameError}</p>}
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onBlur={(e) => validateField("email", e.target.value)}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+            {emailError && <p className="text-sm text-destructive">{emailError}</p>}
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
+          <Button type="submit" className="w-full font-bold" disabled={isLoading || !!usernameError || !!emailError}>
+            {isLoading ? "Creating Account..." : "Complete Registration"}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
+}
+
+function RegisterPageSkeleton() {
+    return (
+        <Card className="w-full max-w-sm shadow-xl">
+        <CardHeader className="text-center">
+            <Skeleton className="h-8 w-48 mx-auto" />
+            <Skeleton className="h-4 w-64 mx-auto mt-2" />
+        </CardHeader>
+        <CardContent className="space-y-3">
+            <div className="space-y-1">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-10 w-full" />
+            </div>
+            <div className="space-y-1">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-10 w-full" />
+            </div>
+            <div className="space-y-1">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-10 w-full" />
+            </div>
+            <Skeleton className="h-10 w-full mt-2" />
+        </CardContent>
+        </Card>
+    )
+}
+
+export default function RegisterPage() {
+    return (
+        <div className="flex items-center justify-center min-h-screen bg-secondary">
+           <Suspense fallback={<RegisterPageSkeleton />}>
+                <RegisterForm />
+           </Suspense>
+        </div>
+    )
 }
