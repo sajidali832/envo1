@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Info, Copy, Check } from "lucide-react";
+import { Info, Copy, Check, Loader2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth, db } from "@/lib/firebase";
@@ -22,13 +22,29 @@ export default function InvestPage() {
   const router = useRouter();
   const { toast } = useToast();
   const easypaisaNumber = "03130306344";
-  const [user] = useAuthState(auth);
+  const [user, authLoading] = useAuthState(auth);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient || authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   if (!user) {
-      // Best to redirect to signin if they get here somehow without being logged in
-      // or handle this case more gracefully. For now, a simple block.
-      // router.push('/signin');
-      return <div>Please sign in to make an investment.</div>
+    // Redirect to signin if they get here somehow without being logged in
+    router.push('/signin');
+    return (
+       <div className="flex items-center justify-center min-h-screen">
+          <p>Redirecting to sign in...</p>
+       </div>
+    );
   }
 
   const handleCopyToClipboard = () => {
