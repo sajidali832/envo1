@@ -14,6 +14,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Download } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
+export const dynamic = 'force-dynamic';
+
 interface User {
   id: string;
   username: string;

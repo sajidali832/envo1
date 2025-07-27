@@ -9,6 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Copy } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
+export const dynamic = 'force-dynamic';
+
 interface UserCredentials {
   id: string;
   username: string;

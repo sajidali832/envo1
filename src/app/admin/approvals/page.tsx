@@ -10,6 +10,8 @@ import Image from "next/image";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 
+export const dynamic = 'force-dynamic';
+
 interface PaymentRequest {
   id: string;
   user_id: string;
