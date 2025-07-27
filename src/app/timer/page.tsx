@@ -6,8 +6,9 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
+import dynamic from "next/dynamic";
+import { Skeleton } from "@/components/ui/skeleton";
 
-export const dynamic = 'force-dynamic';
 
 function TimerComponent() {
   const [timeLeft, setTimeLeft] = useState(600); // 10 minutes in seconds
@@ -137,11 +138,30 @@ function TimerComponent() {
   );
 }
 
+const TimerPageSkeleton = () => (
+    <div className="flex items-center justify-center min-h-screen bg-secondary p-4">
+      <Card className="w-full max-w-md text-center shadow-2xl">
+        <CardHeader>
+          <Skeleton className="h-7 w-48 mx-auto" />
+          <Skeleton className="h-4 w-64 mx-auto mt-2" />
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-20 w-40 mx-auto my-4" />
+          <Skeleton className="h-2.5 w-full rounded-full" />
+        </CardContent>
+      </Card>
+    </div>
+);
+
+const DynamicTimerComponent = dynamic(() => Promise.resolve(TimerComponent), {
+  ssr: false,
+  loading: () => <TimerPageSkeleton />,
+});
 
 export default function TimerPage() {
     return (
-        <Suspense fallback={<div>Loading...</div>}>
-            <TimerComponent />
+        <Suspense fallback={<TimerPageSkeleton />}>
+            <DynamicTimerComponent />
         </Suspense>
     )
 }
