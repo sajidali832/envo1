@@ -33,9 +33,10 @@ export default function WithdrawalsPage() {
             .from('withdrawals')
             .select('*')
             .eq('status', 'processing')
-            .order('submitted_at', { ascending: false });
+            .order('submitted_at', { ascending: true });
 
         if (error) {
+            console.error("Error fetching withdrawals:", error);
             toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch withdrawals.' });
         } else {
             setWithdrawals(data as WithdrawalRequest[]);
@@ -44,8 +45,10 @@ export default function WithdrawalsPage() {
     
     fetchWithdrawals();
 
-    const channel = supabase.channel('realtime-withdrawals-processing')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'withdrawals', filter: 'status=eq.processing' }, (payload) => {
+    const channel = supabase.channel('realtime-withdrawals')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'withdrawals' }, (payload) => {
+        // Refetch all data when any change occurs on the withdrawals table.
+        // This is simpler and ensures data consistency.
         fetchWithdrawals();
       })
       .subscribe();
@@ -67,6 +70,7 @@ export default function WithdrawalsPage() {
           if (error) throw error;
           
           toast({ title: 'Success', description: `Withdrawal has been ${newStatus}.` });
+          // The real-time subscription will automatically refresh the list.
 
       } catch (error: any) {
           console.error("Transaction failed: ", error);
