@@ -13,8 +13,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import dynamic from 'next/dynamic';
 import { createClient } from '@/lib/supabase/client';
 
-export const dynamic = 'force-dynamic';
-
 function RegisterForm() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
