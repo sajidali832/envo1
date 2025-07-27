@@ -14,6 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { Pencil, CheckCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
+export const dynamic = 'force-dynamic';
+
 interface WithdrawalInfo {
   platform: string;
   accountHolderName: string;

@@ -10,6 +10,7 @@ import { Copy, Check, Gift } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { createClient } from "@/lib/supabase/client";
 
+export const dynamic = 'force-dynamic';
 
 interface Referral {
     username: string;
