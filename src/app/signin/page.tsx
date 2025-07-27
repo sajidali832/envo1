@@ -73,7 +73,7 @@ export default function SignInPage() {
     <div className="flex items-center justify-center min-h-screen bg-background">
       <Card className="w-full max-w-sm shadow-xl">
         <CardHeader className="text-center">
-          <div className="flex justify-center items-center gap-2 mb-2">
+          <Link href="/" className="flex justify-center items-center gap-2 mb-2">
              <Image 
               src="/logo.png" 
               alt="EnvoEarn Logo" 
@@ -81,8 +81,7 @@ export default function SignInPage() {
               height={48} 
               className="rounded-full shadow-[0_0_15px_rgba(112,231,217,0.8)]"
             />
-            <h1 className="text-3xl font-headline font-bold text-primary">ENVO-EARN</h1>
-          </div>
+          </Link>
           <CardTitle className="font-headline text-2xl">Sign In</CardTitle>
           <CardDescription>Enter your credentials to access your dashboard.</CardDescription>
         </CardHeader>
