@@ -5,8 +5,6 @@ import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 
-export const dynamic = 'force-dynamic';
-
 const InvestForm = dynamic(() => import('@/components/invest-form'), {
   ssr: false,
   loading: () => <InvestPageSkeleton />,
