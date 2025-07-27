@@ -64,15 +64,9 @@ export default function ApprovalsPage() {
       
       if (paymentError) throw paymentError;
 
-      // If approved, update user's investment status
-      if (newStatus === "approved") {
-        const { error: profileError } = await supabase
-            .from('profiles')
-            .update({ investment: 6000 })
-            .eq('id', userId);
-        
-        if (profileError) throw profileError;
-      }
+      // This part of the logic is now handled in the registration step.
+      // When a user registers, their investment field will be set.
+      // We no longer update the profile here.
 
       toast({
         title: "Success",

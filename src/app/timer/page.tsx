@@ -126,7 +126,7 @@ function TimerComponent() {
           {content}
            {status === 'pending' && (
              <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                <div className="bg-primary h-2.5 rounded-full" style={{ width: `${(timeLeft / 600) * 100}%`, transition: 'width 1s linear' }}></div>
+                <div className="bg-primary h-2.5 rounded-full" style={{ width: `${(1 - (timeLeft / 600)) * 100}%`, transition: 'width 1s linear' }}></div>
             </div>
            )}
         </CardContent>

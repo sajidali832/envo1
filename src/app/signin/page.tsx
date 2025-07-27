@@ -108,12 +108,6 @@ export default function SignInPage() {
               Start here
             </Link>
           </p>
-          <p className="mt-1 text-center text-sm text-muted-foreground">
-            Admin?{" "}
-            <Link href="/admin/login" className="font-semibold text-primary hover:underline">
-              Login here
-            </Link>
-          </p>
         </CardContent>
       </Card>
     </div>

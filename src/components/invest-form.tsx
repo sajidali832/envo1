@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -24,30 +24,7 @@ export default function InvestForm() {
   const { toast } = useToast();
   const easypaisaNumber = "03130306344";
   const supabase = createClient();
-  const [user, setUser] = useState<any | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-
-  useEffect(() => {
-    const getUser = async () => {
-        const { data } = await supabase.auth.getUser();
-        if (data.user) {
-            setUser(data.user);
-        } else {
-            router.push('/signin');
-        }
-        setAuthLoading(false);
-    }
-    getUser();
-  }, [router, supabase.auth]);
-
-  if (authLoading || !user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
-
+  
   const handleCopyToClipboard = () => {
     navigator.clipboard.writeText(easypaisaNumber);
     setIsCopied(true);
@@ -75,7 +52,7 @@ export default function InvestForm() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!accountHolderName || !accountNumber || !paymentScreenshot || !user) {
+    if (!accountHolderName || !accountNumber || !paymentScreenshot) {
       toast({
         variant: "destructive",
         title: "Missing Information",
@@ -87,13 +64,17 @@ export default function InvestForm() {
     setIsLoading(true);
 
     try {
+        // A temporary user ID for this payment submission.
+        // It will be associated with the real user after registration.
+        const tempUserId = uuidv4();
+        
         // 1. Upload screenshot to Supabase Storage
         const fileExt = paymentScreenshot.name.split('.').pop();
-        const fileName = `${user.id}-${uuidv4()}.${fileExt}`;
+        const fileName = `${tempUserId}-${uuidv4()}.${fileExt}`;
         const filePath = `payment-screenshots/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
-            .from('app-files') // Make sure you have a bucket named 'app-files'
+            .from('app-files')
             .upload(filePath, paymentScreenshot);
 
         if (uploadError) throw uploadError;
@@ -111,7 +92,7 @@ export default function InvestForm() {
             .from('payments')
             .insert({
                 id: paymentId,
-                user_id: user.id,
+                user_id: tempUserId, // Using the temporary ID
                 account_holder_name: accountHolderName,
                 account_number: accountNumber,
                 payment_platform: "Easypaisa",

@@ -1,12 +1,6 @@
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from "@/components/ui/carousel";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Star } from "lucide-react";
 import Image from "next/image";
@@ -49,18 +43,6 @@ const testimonials = [
     rating: 5,
     avatar: "SJ",
   },
-  {
-    name: "Imran Raza",
-    review: "A solid platform for passive income. The 6000 PKR investment is well worth it.",
-    rating: 4,
-    avatar: "IR",
-  },
-  {
-    name: "Zoya Chishti",
-    review: "I appreciate the clear instructions and the quick approval process. Very professional.",
-    rating: 5,
-    avatar: "ZC",
-  },
 ];
 
 
@@ -96,48 +78,34 @@ export default function Home() {
             <h3 className="text-3xl font-headline font-bold text-center mb-12">
               Trusted by Hundreds of Pakistanis
             </h3>
-            <Carousel
-              opts={{
-                align: "start",
-                loop: true,
-              }}
-              className="w-full max-w-5xl mx-auto"
-            >
-              <CarouselContent>
-                {testimonials.map((testimonial, index) => (
-                  <CarouselItem key={index} className="md:basis-1/2 lg:basis-1/3">
-                    <div className="p-1 h-full">
-                      <Card className="h-full flex flex-col justify-between p-6 shadow-md hover:shadow-xl transition-shadow duration-300">
-                        <div>
-                          <div className="flex items-center mb-4">
-                            <Avatar>
-                              <AvatarImage src={`https://placehold.co/40x40.png?text=${testimonial.avatar}`} alt={testimonial.name} />
-                              <AvatarFallback>{testimonial.avatar}</AvatarFallback>
-                            </Avatar>
-                            <div className="ml-4">
-                              <p className="font-bold font-headline">{testimonial.name}</p>
-                              <div className="flex">
-                                {Array.from({ length: 5 }).map((_, i) => (
-                                  <Star
-                                    key={i}
-                                    className={`w-4 h-4 ${i < testimonial.rating ? "text-yellow-400 fill-yellow-400" : "text-gray-300"}`}
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                          <CardContent className="p-0">
-                            <p className="text-muted-foreground">{testimonial.review}</p>
-                          </CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {testimonials.map((testimonial, index) => (
+                <Card key={index} className="flex flex-col justify-between p-6 shadow-md hover:shadow-xl transition-shadow duration-300">
+                  <div>
+                    <div className="flex items-center mb-4">
+                      <Avatar className="h-12 w-12">
+                        <AvatarImage src={`https://placehold.co/48x48.png?text=${testimonial.avatar}`} alt={testimonial.name} />
+                        <AvatarFallback>{testimonial.avatar}</AvatarFallback>
+                      </Avatar>
+                      <div className="ml-4">
+                        <p className="font-bold font-headline text-lg">{testimonial.name}</p>
+                        <div className="flex">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star
+                              key={i}
+                              className={`w-5 h-5 ${i < testimonial.rating ? "text-yellow-400 fill-yellow-400" : "text-gray-300"}`}
+                            />
+                          ))}
                         </div>
-                      </Card>
+                      </div>
                     </div>
-                  </CarouselItem>
-                ))}
-              </CarouselContent>
-              <CarouselPrevious className="hidden sm:flex" />
-              <CarouselNext className="hidden sm:flex" />
-            </Carousel>
+                    <CardContent className="p-0">
+                      <p className="text-muted-foreground text-base">{testimonial.review}</p>
+                    </CardContent>
+                  </div>
+                </Card>
+              ))}
+            </div>
           </div>
         </section>
       </main>

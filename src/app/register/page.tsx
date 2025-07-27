@@ -24,6 +24,7 @@ function RegisterForm() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const supabase = createClient();
+  const [paymentUserId, setPaymentUserId] = useState<string | null>(null);
 
   // Client-side check for payment approval
   useEffect(() => {
@@ -36,20 +37,33 @@ function RegisterForm() {
 
     const checkPayment = async () => {
         try {
-            // In a real app, you would verify this against your database.
-            // For now, we assume if paymentId exists, it's valid for registration.
-            // This is a placeholder for the logic you'd implement with Supabase.
-            console.log("Verifying payment ID:", paymentId);
-        } catch (e) {
+            const {data, error} = await supabase
+                .from('payments')
+                .select('status, user_id')
+                .eq('id', paymentId)
+                .single();
+
+            if (error || !data) {
+                throw new Error("Could not verify payment.");
+            }
+            if (data.status !== 'approved') {
+                 toast({ variant: "destructive", title: "Access Denied", description: "Your payment has not been approved yet." });
+                 router.push("/timer");
+                 return;
+            }
+            // Store the temporary user_id from the payment record
+            setPaymentUserId(data.user_id);
+        } catch (e: any) {
             console.error(e);
-            toast({ variant: "destructive", title: "Error", description: "Could not verify payment status." });
+            toast({ variant: "destructive", title: "Error", description: e.message || "Could not verify payment status." });
             router.push("/invest");
         }
     };
     checkPayment();
-  }, [router, toast]);
+  }, [router, toast, supabase]);
 
   const validateField = async (field: "username" | "email", value: string) => {
+    if (!value) return;
     if (field === "username") {
       const { data } = await supabase.from('profiles').select('id').eq('username', value);
       if (data && data.length > 0) {
@@ -73,7 +87,7 @@ function RegisterForm() {
     await validateField("username", username);
     await validateField("email", email);
 
-    if (usernameError || emailError || !username || !email || !password) {
+    if (usernameError || emailError || !username || !email || !password || !paymentUserId) {
       toast({
         variant: "destructive",
         title: "Registration Failed",
@@ -101,11 +115,12 @@ function RegisterForm() {
       const user = authData.user;
       const ref = searchParams.get('ref');
 
-      // Step 2: Create a profile in the 'profiles' table
+      // Step 2: Create a profile in the 'profiles' table, replacing the temp id with the real one.
       const { error: profileError } = await supabase
         .from('profiles')
         .insert({
-          id: user.id,
+          id: user.id, // The real auth user ID
+          temp_id: paymentUserId, // The temporary ID from payment
           username,
           email,
           investment: 6000,
@@ -120,9 +135,7 @@ function RegisterForm() {
 
       // Handle referral bonus
       if (ref) {
-        // This needs to be a call to a Supabase Edge Function to avoid security issues
-        // For now, we'll log it.
-        console.log(`User ${username} was referred by ${ref}`);
+        await supabase.rpc('add_referral_and_bonus', { referrer_username: ref, new_user_id: user.id, new_user_username: username });
       }
       
       sessionStorage.removeItem("currentPaymentId");
