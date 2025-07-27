@@ -11,6 +11,7 @@ import {
   LogOut,
   BarChart
 } from "lucide-react"
+import Image from "next/image"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -38,7 +39,14 @@ export function AdminSidebar() {
       <div className="flex h-full max-h-screen flex-col gap-2">
         <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
           <Link href="/admin/dashboard" className="flex items-center gap-2 font-semibold font-headline">
-            <span className="text-lg text-primary">ENVO-EARN Admin</span>
+             <Image 
+              src="/logo.png" 
+              alt="EnvoEarn Logo" 
+              width={32} 
+              height={32} 
+              className="rounded-full shadow-[0_0_10px_rgba(112,231,217,0.7)]"
+            />
+            <span className="text-lg text-primary">Admin Panel</span>
           </Link>
         </div>
         <div className="flex-1">

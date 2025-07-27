@@ -50,7 +50,16 @@ export default function Home() {
   return (
     <div className="flex flex-col min-h-screen bg-background">
       <header className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-        <h1 className="text-2xl font-headline font-bold text-primary">ENVO-EARN</h1>
+        <Link href="/" className="flex items-center gap-2">
+           <Image 
+            src="/logo.png" 
+            alt="EnvoEarn Logo" 
+            width={40} 
+            height={40} 
+            className="rounded-full shadow-[0_0_15px_rgba(112,231,217,0.8)]"
+          />
+          <h1 className="text-2xl font-headline font-bold text-primary">ENVO-EARN</h1>
+        </Link>
         <Link href="/signin">
           <Button variant="ghost">Sign In</Button>
         </Link>
@@ -80,29 +89,27 @@ export default function Home() {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {testimonials.map((testimonial, index) => (
-                <Card key={index} className="flex flex-col justify-between p-6 shadow-md hover:shadow-xl transition-shadow duration-300">
-                  <div>
-                    <div className="flex items-center mb-4">
+                <Card key={index} className="flex flex-col justify-between p-6 shadow-md hover:shadow-xl transition-shadow duration-300 transform hover:-translate-y-2">
+                  <CardContent className="p-0 flex-grow">
+                     <div className="flex items-center mb-4">
                       <Avatar className="h-12 w-12">
                         <AvatarImage src={`https://placehold.co/48x48.png?text=${testimonial.avatar}`} alt={testimonial.name} />
                         <AvatarFallback>{testimonial.avatar}</AvatarFallback>
                       </Avatar>
                       <div className="ml-4">
                         <p className="font-bold font-headline text-lg">{testimonial.name}</p>
-                        <div className="flex">
-                          {Array.from({ length: 5 }).map((_, i) => (
-                            <Star
-                              key={i}
-                              className={`w-5 h-5 ${i < testimonial.rating ? "text-yellow-400 fill-yellow-400" : "text-gray-300"}`}
-                            />
-                          ))}
-                        </div>
                       </div>
                     </div>
-                    <CardContent className="p-0">
-                      <p className="text-muted-foreground text-base">{testimonial.review}</p>
-                    </CardContent>
-                  </div>
+                    <p className="text-muted-foreground text-base mb-4">{testimonial.review}</p>
+                  </CardContent>
+                  <div className="flex pt-4 border-t">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`w-5 h-5 ${i < testimonial.rating ? "text-yellow-400 fill-yellow-400" : "text-gray-300"}`}
+                        />
+                      ))}
+                    </div>
                 </Card>
               ))}
             </div>
