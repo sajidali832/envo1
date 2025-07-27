@@ -58,7 +58,6 @@ export default function Home() {
             height={40} 
             className="rounded-full shadow-[0_0_15px_rgba(112,231,217,0.8)]"
           />
-          <h1 className="text-2xl font-headline font-bold text-primary">ENVO-EARN</h1>
         </Link>
         <Link href="/signin">
           <Button variant="ghost">Sign In</Button>
