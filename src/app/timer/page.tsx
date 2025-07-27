@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 
+export const dynamic = 'force-dynamic';
+
 function TimerComponent() {
   const [timeLeft, setTimeLeft] = useState(600); // 10 minutes in seconds
   const [status, setStatus] = useState<"pending" | "approved" | "rejected" | "timedout">("pending");
